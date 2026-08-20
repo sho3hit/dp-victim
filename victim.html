@@ -1,0 +1,65 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>DOMPurify sink (victim)</title>
+<script src="purify.min.js"></script>
+<style>
+  body{font:14px/1.5 system-ui,sans-serif;margin:24px;max-width:900px}
+  pre{background:#111;color:#0f0;padding:10px;border-radius:6px;overflow:auto;white-space:pre-wrap;word-break:break-all}
+  .k{color:#888}
+  #out{border:1px dashed #bbb;padding:10px;min-height:40px;margin:10px 0}
+  code{background:#eee;padding:1px 4px;border-radius:3px}
+</style>
+</head>
+<body>
+<h2>Victim page — the DOMPurify sink</h2>
+<p class="k">This page reflects the <code>q</code> parameter into <code>innerHTML</code> after
+<code>DOMPurify.sanitize()</code>, exactly like the "safe reflection" pattern. The secret token
+sits in this page's own URL as <code>code=...</code>. Nothing here reads or embeds the token —
+if the attacker server ever sees it, it arrived via the <em>Referer</em> header only.</p>
+
+<div><span class="k">DOMPurify version:</span> <b id="ver"></b> &nbsp;
+     <span class="k">Config:</span> <b id="cfg"></b> &nbsp;
+     <span class="k">Token in URL:</span> <b id="tok"></b></div>
+
+<h3>Rendered (sanitized) output</h3>
+<div id="out"></div>
+
+<h3>Raw input (q)</h3>
+<pre id="raw"></pre>
+
+<h3>Sanitized string DOMPurify returned</h3>
+<p class="k">If a <code>&lt;meta&gt;</code> or <code>referrerpolicy=</code> is absent below, DOMPurify stripped it —
+for Technique&nbsp;2 that is expected; the side effect (if any) already happened during sanitize().</p>
+<pre id="clean"></pre>
+
+<script>
+(function(){
+  var p = new URLSearchParams(location.search);
+  var raw = p.get("q") || "";
+  var cfg = p.get("cfg") || "default";
+  var code = p.get("code") || "(none)";
+
+  document.getElementById("ver").textContent = (window.DOMPurify && DOMPurify.version) || "?";
+  document.getElementById("cfg").textContent = cfg;
+  document.getElementById("tok").textContent = code;
+  document.getElementById("raw").textContent = raw;
+
+  // Sanitizer configuration:
+  //   default  -> stock DOMPurify defaults (strips <meta>, <style>, referrerpolicy, ping)
+  //   addattr  -> target that opted referrerpolicy + ping back in (ADD_ATTR)
+  //   style    -> target that allows the <style> element (ADD_TAGS:['style'])
+  var opts = {};
+  if (cfg === "addattr") opts = { ADD_ATTR: ["referrerpolicy", "ping"] };
+  else if (cfg === "style") opts = { ADD_TAGS: ["style"] };
+
+  var clean = DOMPurify.sanitize(raw, opts);
+  document.getElementById("clean").textContent = clean;
+
+  // Inserting into the LIVE DOM is what fires the subresource requests.
+  document.getElementById("out").innerHTML = clean;
+})();
+</script>
+</body>
+</html>

