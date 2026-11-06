@@ -58,6 +58,8 @@ every result is meaningless.</p></div>
   <p class="n">Step 2 · the issue</p>
   <a class="t" data-p="/inbox" data-tag="step2-open-in-new-tab">Open Demo Mail inbox</a>
   <p><span class="how">TOUCH &amp; HOLD → OPEN IN NEW TAB</span></p>
+  <p class="exp" style="color:#ffc53d">Pick <b>Open in New Tab</b>, not "Open in New Tab
+  Group" — the Tab Group option prompts for a name and puts a keyboard over the video.</p>
   <p class="exp">Same link, same URL, same session. Observed:
   <span class="bad">SIGNED IN</span> — the Strict session cookie is attached, and the page
   renders private account data.</p>
@@ -66,12 +68,15 @@ every result is meaningless.</p></div>
 
 <div class="step bug">
   <p class="n">Step 3 · reload proves the tab knows better</p>
-  <a class="t" data-p="/inbox" data-tag="step3-reload-after">(use the Step 2 tab)</a>
-  <p><span class="how">IN THE TAB FROM STEP 2, PULL TO REFRESH</span></p>
+  <p style="font-size:19px;font-weight:700;color:#ffc53d;margin:2px 0 8px">
+    Do not tap anything here.</p>
+  <p><span class="how">GO BACK TO THE STEP 2 TAB · PULL TO REFRESH IT</span></p>
   <p class="exp">The same URL in the same tab now reports
   <code>Sec-Fetch-Site: cross-site</code> and goes back to
   <span class="ok">SIGNED OUT</span>. The cross-site relationship is known — it is lost
-  only while the tab is being created.</p>
+  only while the tab is being created. The Test ID stays the same as Step 2; if you see
+  a new Test ID, you opened a new tab instead of reloading and this step did not
+  demonstrate anything.</p>
 </div>
 
 <div class="step bug">
