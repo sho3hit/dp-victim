@@ -57,9 +57,9 @@ every result is meaningless.</p></div>
 <div class="step bug">
   <p class="n">Step 2 · the issue</p>
   <a class="t" data-p="/inbox" data-tag="step2-open-in-new-tab">Open Demo Mail inbox</a>
-  <p><span class="how">TOUCH &amp; HOLD → OPEN IN NEW TAB</span></p>
-  <p class="exp" style="color:#ffc53d">Pick <b>Open in New Tab</b>, not "Open in New Tab
-  Group" — the Tab Group option prompts for a name and puts a keyboard over the video.</p>
+  <p><span class="how">TOUCH &amp; HOLD → the gesture confirmed in the matrix below</span></p>
+  <p class="exp" style="color:#ffc53d">Use whichever menu item the gesture matrix shows
+  actually leaks. Do not assume it is "Open in New Tab".</p>
   <p class="exp">Same link, same URL, same session. Observed:
   <span class="bad">SIGNED IN</span> — the Strict session cookie is attached, and the page
   renders private account data.</p>
@@ -87,6 +87,30 @@ every result is meaningless.</p></div>
   authenticated session. Opened this way it authenticates, mints a code, and redirects it
   to attacker.example — which displays it at the top of this page.</p>
   <p class="id">Test ID: <code class="nid">—</code></p>
+</div>
+
+<div class="step">
+  <p class="n">Gesture matrix · establishes which menu item triggers it</p>
+  <p class="exp" style="margin-bottom:10px">Four links, four tags. Use each one with
+  <b>only</b> its own gesture, and close the resulting tab before the next. The log then
+  states which menu item leaks without you having to remember anything.</p>
+
+  <a class="t" data-p="/inbox" data-tag="g1-open-plain">g1 · plain tap</a>
+  <p><span class="how">TAP — no menu</span></p>
+
+  <a class="t" data-p="/inbox" data-tag="g2-longpress-open">g2 · menu → Open</a>
+  <p><span class="how">TOUCH &amp; HOLD → OPEN</span></p>
+
+  <a class="t" data-p="/inbox" data-tag="g3-open-in-new-tab">g3 · menu → Open in New Tab</a>
+  <p><span class="how">TOUCH &amp; HOLD → OPEN IN NEW TAB</span></p>
+
+  <a class="t" data-p="/inbox" data-tag="g4-tab-group-existing">g4 · Tab Group → existing group</a>
+  <p><span class="how">TOUCH &amp; HOLD → OPEN IN TAB GROUP → pick an existing group</span></p>
+
+  <a class="t" data-p="/inbox" data-tag="g5-tab-group-new">g5 · Tab Group → New Tab Group</a>
+  <p><span class="how">TOUCH &amp; HOLD → OPEN IN TAB GROUP → NEW TAB GROUP</span></p>
+  <p class="exp">Needs an existing group to exist for g4. If you have none, run g5 first
+  to create one, then g4 into it.</p>
 </div>
 
 <script>
