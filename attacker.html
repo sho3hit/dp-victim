@@ -63,6 +63,32 @@ below and watch the victim's <code>/log</code>.</p>
   trusting any result below.</p>
 </div>
 
+<h2>A2 · New-tab initiation — the severity question</h2>
+<div class="card">
+  <a class="t" data-p="/probe" data-tag="A2-open-in-tab-group">Long-press → Open in Tab Group</a>
+  <p><span class="how">TOUCH &amp; HOLD → OPEN IN TAB GROUP</span>
+  Confirmed leaking: Strict sent, <code>Sec-Fetch-Site: none</code>, no Referer.</p>
+</div>
+<div class="card">
+  <a class="t" data-p="/probe" data-tag="A3-open-in-new-tab">Long-press → Open in New Tab</a>
+  <p><span class="how">TOUCH &amp; HOLD → OPEN IN NEW TAB</span>
+  Adjacent menu item, probably the same code path. Far more commonly used than Tab
+  Groups, so if it leaks the reachability argument gets much stronger.</p>
+</div>
+<div class="card">
+  <a class="t" data-p="/probe" data-tag="A4-target-blank" target="_blank" rel="opener">Plain tap (target=_blank)</a>
+  <p><span class="how">SINGLE TAP</span>
+  <b>The one that matters most.</b> If a <code>target="_blank"</code> link leaks Strict
+  on a single tap, this stops being a context-menu curiosity and becomes a one-click
+  SameSite bypass with no unusual user action at all.</p>
+</div>
+<div class="card">
+  <a class="t" data-p="/probe" data-tag="A5-window-open" data-winopen="1" href="#">Tap: window.open()</a>
+  <p><span class="how">SINGLE TAP → script-opened window</span>
+  Script-initiated new window. Same question as above, and it removes the link element
+  from the equation entirely.</p>
+</div>
+
 <h2>B · iOS / iPadOS Safari — long-press link preview</h2>
 <div class="card">
   <a class="t" data-p="/probe" data-tag="B-ios-longpress-peek">Long-press me to preview</a>
@@ -164,6 +190,7 @@ below and watch the victim's <code>/log</code>.</p>
             + Math.random().toString(36).slice(2, 8);
     var u = origin() + p + (p.indexOf('?') > -1 ? '&' : '?')
             + 'tag=' + encodeURIComponent(tag) + '&n=' + n;
+    if (a.dataset.winopen) { a.dataset.url = u; a.href = '#'; return; }
     if (a.dataset.redir) u += '&to=' + encodeURIComponent(cb + '?what=redirect');
     if (a.dataset.auth)  u += '&redirect_uri='
         + encodeURIComponent(cb + '?lab=' + encodeURIComponent(origin()));
@@ -199,6 +226,14 @@ below and watch the victim's <code>/log</code>.</p>
     document.addEventListener(ev, function (e) {
       var a = e.target.closest && e.target.closest('a.t'); if (a) build(a);
     }, true);
+  });
+
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('a.t[data-winopen]');
+    if (!a) return;
+    e.preventDefault();
+    build(a);
+    window.open(a.dataset.url, '_blank');
   });
 
   function show(code) {
